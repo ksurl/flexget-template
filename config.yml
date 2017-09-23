@@ -1,0 +1,83 @@
+variables: variables.yml
+
+templates:
+
+  deluge-series:
+    deluge:
+      path: /home/username/.incomplete
+      content_filename: "{{series_name|replace(':',' -')}} {{series_id|pad(2)}}{% if proper_count %} PROPER{% if proper_count > 1 %}{{proper_count}}{% endif %}{% endif %}"
+      movedone: '/home/username/downloads/'
+      ratio: 0.1
+
+  notify-series:
+    notify:
+      entries:
+        title: 'FlexGet'
+        message: "Downloading {{series_name|replace(':',' -')}} {{series_id|pad(2)}}"
+        via:
+          - pushbullet:
+              api_key: '{? pushbullet.apikey ?}'
+
+tasks:
+  task1:
+    rss: https://feed.com/rss
+    include: series1.yml
+    template:
+      - deluge-series
+      - notify-series
+
+  task2:
+    rss: https://feed2.com/rss
+    regexp:
+      accept:
+        - string
+    include: series2.yml
+    template:
+      - deluge-series
+      - notify-series
+  
+  sync:
+    sftp_list:
+      host: '{? sftp.host ?}'
+      username: '{? sftp.username ?}'
+      private_key: '{? sftp.private_key ?}'
+      private_key_pass: '{? sftp.private_key_pass ?}'
+      dirs:
+        - '/home/username/downloads/'
+    accept_all: yes
+    sftp_download:
+      to: '/home/username/downloads'
+    notify:
+      entries:
+        title: 'FlexGet'
+        message: 'Downloaded {{title}}'
+        via:
+          - pushbullet:
+              api_key: '{? pushbullet.apikey ?}'
+
+  sort1:
+    filesystem:
+      path: '/home/username/downloads/'
+    include: series1.yml
+    move:
+      to: "/home/username/videos/series1/{{series_name}}/"
+
+  sort2:
+    filesystem:
+      path: '/home/username/downloads/'
+    include: series2.yml
+    move:
+      to: "/home/username/videos/series2/{{series_name}}/"
+
+schedules:
+  - tasks: [task1, task2]
+    interval:
+      minutes: 30
+  - tasks: sync
+    schedule:
+      minute: "*/30"
+      hour: 8-23
+  - tasks: [sort1, sort2]
+    schedule:
+      minute: 10,40
+      hour: 8-23

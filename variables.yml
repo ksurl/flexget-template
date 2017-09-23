@@ -1,0 +1,8 @@
+sftp:
+  host: 'IP'
+  username: username
+  private_key: /home/username/.ssh/key
+  private_key_pass: password
+
+pushbullet:
+  apikey: 'apikey'
