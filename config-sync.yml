@@ -1,0 +1,73 @@
+variables: variables.yml
+
+templates:
+
+  anchors:
+    _sftp_list: &sftp_list
+      host: '{? sftp.host ?}'
+      username: '{? sftp.username ?}'
+      private_key: '{? sftp.privatekey ?}'
+      private_key_pass: '{? sftp.private_key_pass ?}'
+
+  notify-sync:
+    notify:
+      entries:
+        title: "FlexGet - {? local.hostname ?}"
+        message: "Downloaded {{title}}"
+        via:
+          - pushbullet:
+              api_key: '{? pushbullet.apikey ?}'
+
+tasks:
+
+  sync-series:
+    sftp_list:
+      <<: *sftp_list
+      dirs:
+        - '/home/{? local.username ?}/downloads/flexget/series/'
+    accept_all: yes
+    sftp_download:
+      to: '/home/{? local.username ?}/{? local.sharename ?}/downloads/flexget/series/'
+    template: notify-sync
+  
+  sync-movies:
+    sftp_list:
+      <<: *sftp_list
+      dirs:
+        - '/home/{? local.username ?}/downloads/flexget/movies/'
+    accept_all: yes
+    sftp_download:
+      to: '/home/{? local.username ?}/{? local.sharename ?}/downloads/flexget/movie/'
+    template: notify-sync
+
+  sort-anime:
+    filesystem: '/home/{? local.username ?}/{? local.sharename ?}/downloads/flexget/series/'
+    configure_series:
+      from:
+        filesystem: '/home/{? local.username ?}/{? local.sharename ?}/videos/Anime/'
+    move:
+      to: "/home/{? local.username ?}/{? local.sharename ?}/videos/Anime/{{series_name}}/"
+
+  sort-tv:
+    filesystem: '/home/{? local.username ?}/{? local.sharename ?}/downloads/flexget/series/'
+    configure_series:
+      from:
+        filesystem: '/home/{? local.username ?}/{? local.sharename ?}/videos/TV/'
+    move:
+      to: "/home/{? local.username ?}/{? local.sharename ?}/videos/TV/{{series_name}}/{{series_season}}/"
+
+  sort-movies:
+    filesystem: '/home/{? local.username ?}/{? local.sharename ?}/downloads/flexget/movies/'
+    accept_all: yes
+    move:
+      to: "/home/{? local.username ?}/{? local.sharename ?}/videos/Movies/"
+
+schedule:
+  - tasks: "sync*"
+    schedule:
+      minute: "*/30"
+      hour: 8-23
+  - tasks: "sort*"
+    schedule:
+      minute: 10,40
+      hour: 8-23

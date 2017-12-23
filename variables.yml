@@ -1,8 +1,28 @@
+local:
+  username: 'username'
+  hostname: 'hostname'
+
 sftp:
   host: 'IP'
-  username: username
-  private_key: /home/username/.ssh/key
-  private_key_pass: password
+  username: 'username'
+  private_key: '/home/username/.ssh/key'
+  private_key_pass: 'password'
+
+feeds:
+  anime: 'anime rss url'
+  tv: 'tv rss url'
+  movies: 'movie rss url'
 
 pushbullet:
   apikey: 'apikey'
+
+letterboxd:
+  username: 'username'
+  list: 'list'
+
+myanimelist:
+  username: 'username'
+
+tvdb:
+  username: 'username'
+  account: 'account'

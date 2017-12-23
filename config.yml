@@ -2,82 +2,85 @@ variables: variables.yml
 
 templates:
 
+  anchors:
+    _deluge: &deluge
+      path: '/home/{? local.username ?}/.incomplete'
+      ratio: 1.0
+
+    _entries: &entries
+      title: 'FlexGet - {? local.hostname ?}'
+      via:
+        - pushbullet '{? pushbullet.apikey ?}'
+    
   deluge-series:
     deluge:
-      path: /home/username/.incomplete
+      <<: *deluge
       content_filename: "{{series_name|replace(':',' -')}} {{series_id|pad(2)}}{% if proper_count %} PROPER{% if proper_count > 1 %}{{proper_count}}{% endif %}{% endif %}"
-      movedone: '/home/username/downloads/'
-      ratio: 0.1
+      movedone: '/home/{? local.username ?}/downloads/flexget/series/'
+  
+  deluge-movies:
+    deluge:
+      <<: *deluge
+      content_filename: "{{tmdb_name|replace(':',' -')}} [{{tmdb_year}}]"
+      movedone: '/home/{? local.username ?}/downloads/flexget/movies/'
 
   notify-series:
     notify:
       entries:
-        title: 'FlexGet'
+        <<: *entries
         message: "Downloading {{series_name|replace(':',' -')}} {{series_id|pad(2)}}"
-        via:
-          - pushbullet:
-              api_key: '{? pushbullet.apikey ?}'
+
+  notify-movies:
+    notify:
+      entries:
+        <<: *entries
+        message: "Downloading {{tmdb_name|replace(':',' -')}} [{{tmdb_year}}]"
 
 tasks:
-  task1:
-    rss: https://feed.com/rss
-    include: series1.yml
+
+  anime:
+    rss: '{? feeds.anime ?}'
+    configure_series:
+      from:
+        my_anime_list:
+          username: '{? myanimelist.username ?}'
     template:
       - deluge-series
       - notify-series
 
-  task2:
-    rss: https://feed2.com/rss
-    regexp:
-      accept:
-        - string
-    include: series2.yml
+  tv:
+    rss: '{? feeds.tv ?}'
+    configure_series:
+      from:
+        thetvdb_list:
+          username: '{? tvdb.username ?}'
+          account_id: '{? tvdb.account ?}'
+          strip_dates: yes
     template:
       - deluge-series
       - notify-series
   
-  sync:
-    sftp_list:
-      host: '{? sftp.host ?}'
-      username: '{? sftp.username ?}'
-      private_key: '{? sftp.private_key ?}'
-      private_key_pass: '{? sftp.private_key_pass ?}'
-      dirs:
-        - '/home/username/downloads/'
-    accept_all: yes
-    sftp_download:
-      to: '/home/username/downloads'
-    notify:
-      entries:
-        title: 'FlexGet'
-        message: 'Downloaded {{title}}'
-        via:
-          - pushbullet:
-              api_key: '{? pushbullet.apikey ?}'
-
-  sort1:
-    filesystem:
-      path: '/home/username/downloads/'
-    include: series1.yml
-    move:
-      to: "/home/username/videos/series1/{{series_name}}/"
-
-  sort2:
-    filesystem:
-      path: '/home/username/downloads/'
-    include: series2.yml
-    move:
-      to: "/home/username/videos/series2/{{series_name}}/"
+  movies:
+    rss: '{? feeds.movies ?}'
+    crossmatch:
+      from:
+        - letterboxd:
+            username: '{? letterboxd.username ?}'
+            list: '{? letterboxd.list ?}'
+            sort_by: release_ascending
+      fields:
+        - title
+      action: accept
+      exact: no
+    tmdb_lookup: yes
+    template:
+      - deluge-movies
+      - notify-movies
 
 schedules:
-  - tasks: [task1, task2]
+  - tasks: [anime, tv]
     interval:
       minutes: 30
-  - tasks: sync
+  - tasks: movies
     schedule:
-      minute: "*/30"
-      hour: 8-23
-  - tasks: [sort1, sort2]
-    schedule:
-      minute: 10,40
-      hour: 8-23
+      hour: 2
