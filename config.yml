@@ -26,7 +26,7 @@ templates:
       <<: *deluge
       content_filename: "{{tmdb_name|replace(':',' -')}} [{{tmdb_year}}]"
       main_file_only: yes
-      movedone: '{? local.downloads ?}/.yts/'
+      movedone: '{? local.downloads ?}/.movies/'
 
   notify-series:
     notify:
@@ -77,7 +77,7 @@ tasks:
           strip_dates: yes
     deluge:
       <<: *deluge
-      movedone: '{? local.downloads ?}/.magnet/'
+      movedone: '{? local.downloads ?}/.tv/'
     template: notify-series
   
   movies-crossmatch:
