@@ -1,17 +1,13 @@
 local:
-  username: 'username'
   hostname: 'hostname'
-
-sftp:
-  host: 'IP'
-  username: 'username'
-  private_key: '/home/username/.ssh/key'
-  private_key_pass: 'password'
+  deluge: '/home/username/downloads/.incomplete'
+  downloads: '/home/username/downloads/flexget'
+  config: '/home/username/.config/flexget'
 
 feeds:
-  anime: 'anime rss url'
-  tv: 'tv rss url'
-  movies: 'movie rss url'
+  anime: 'anime url'
+  tv: 'tv url'
+  movies: 'movies url'
 
 pushbullet:
   apikey: 'apikey'

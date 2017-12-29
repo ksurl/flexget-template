@@ -2,9 +2,12 @@ variables: variables.yml
 
 templates:
 
+  global:
+    no_entries_ok: yes
+
   anchors:
     _deluge: &deluge
-      path: '/home/{? local.username ?}/.incomplete'
+      path: '{? local.deluge ?}/.incomplete'
       ratio: 1.0
 
     _entries: &entries
@@ -16,13 +19,14 @@ templates:
     deluge:
       <<: *deluge
       content_filename: "{{series_name|replace(':',' -')}} {{series_id|pad(2)}}{% if proper_count %} PROPER{% if proper_count > 1 %}{{proper_count}}{% endif %}{% endif %}"
-      movedone: '/home/{? local.username ?}/downloads/flexget/series/'
+      movedone: '{? local.downloads ?}/series/'
   
   deluge-movies:
     deluge:
       <<: *deluge
       content_filename: "{{tmdb_name|replace(':',' -')}} [{{tmdb_year}}]"
-      movedone: '/home/{? local.username ?}/downloads/flexget/movies/'
+      main_file_only: yes
+      movedone: '{? local.downloads ?}/.yts/'
 
   notify-series:
     notify:
@@ -44,6 +48,9 @@ tasks:
       from:
         my_anime_list:
           username: '{? myanimelist.username ?}'
+          status:
+            - watching
+            - plan_to_watch
     template:
       - deluge-series
       - notify-series
@@ -60,7 +67,20 @@ tasks:
       - deluge-series
       - notify-series
   
-  movies:
+  magnet-tv:
+    rss: '{? feeds.tv ?}'
+    configure_series:
+      from:
+        thetvdb_list:
+          username: '{? tvdb.username ?}'
+          account_id: '{? tvdb.account ?}'
+          strip_dates: yes
+    deluge:
+      <<: *deluge
+      movedone: '{? local.downloads ?}/.magnet/'
+    template: notify-series
+  
+  movies-crossmatch:
     rss: '{? feeds.movies ?}'
     crossmatch:
       from:
@@ -68,6 +88,7 @@ tasks:
             username: '{? letterboxd.username ?}'
             list: '{? letterboxd.list ?}'
             sort_by: release_ascending
+            max_results: 5
       fields:
         - title
       action: accept
@@ -77,10 +98,88 @@ tasks:
       - deluge-movies
       - notify-movies
 
+  movies-list:
+    rss: '{? feeds.yts ?}'
+    list_match:
+      from:
+        - movie_list: movies
+    tmdb_lookup: yes
+    template:
+      - deluge-movies
+      - notify-movies
+
+  import-letterboxd:
+    letterboxd:
+      username: '{? letterboxd.username ?}'
+      list: '{? letterboxd.list ?}'
+      sort_by: added
+      max_results: 5
+    tmdb_lookup: yes
+    accept_all: yes
+    list_add:
+      - movie_list: movies
+
+  import-csv:
+    csv:
+      url: 'file://{? local.config ?}/movies.csv'
+      values:
+        title: 1
+        url: 2
+    tmdb_lookup: yes
+    accept_all: yes
+    list_add:
+      - movie_list: movies
+
+  magnet-tv-move:
+    filesystem:
+      path: '{? local.downloads ?}/.tv/'
+      recursive: yes
+      retrieve: files
+      mask: '*.mp4'
+    accept_all: yes
+    metainfo_series: yes
+    disable: builtins
+    move:
+      to: '{? local.downloads ?}/series/'
+      rename: "{{series_name|replace(':',' -')}} {{series_id|pad(2)}}{% if proper_count %} PROPER{% if proper_count > 1 %}{{proper_count}}{% endif %}{% endif %}"
+      clean_source: 100
+
+  movies-move:
+    filesystem:
+      path: '{? local.downloads ?}/.movies/'
+      recursive: yes
+      retrieve: files
+      mask: '*.mp4'
+    accept_all: yes
+    disable: builtins
+    move:
+      to: '{? local.downloads ?}/movies/'
+      clean_source: 100
+
+  magnet-cleanup:
+    filesystem:
+      path: '{? local.config ?}/converted/'
+      retrieve: files
+      mask: '*.torrent'
+    accept_all: yes
+    disable: builtins
+    exec: 'rm {? local.config ?}/converted/{{title}}.torrent'
+
 schedules:
   - tasks: [anime, tv]
-    interval:
-      minutes: 30
-  - tasks: movies
+    schedule:
+      minute: "*/30"
+  - tasks: movies-crossmatch
     schedule:
       hour: 2
+  - tasks: movies-move
+    schedule:
+      hour: 2
+      minute: 30
+  - tasks: magnet-tv-move
+    schedule:
+      minute: 10,40
+  - tasks: magnet-cleanup
+    schedule:
+      day_of_week: mon
+      hour: 6
