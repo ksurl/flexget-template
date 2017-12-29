@@ -7,7 +7,7 @@ templates:
 
   anchors:
     _deluge: &deluge
-      path: '{? local.deluge ?}/.incomplete'
+      path: '{? local.deluge ?}'
       ratio: 1.0
 
     _entries: &entries
@@ -18,7 +18,7 @@ templates:
   deluge-series:
     deluge:
       <<: *deluge
-      content_filename: "{{series_name|replace(':',' -')}} {{series_id|pad(2)}}{% if proper_count %} PROPER{% if proper_count > 1 %}{{proper_count}}{% endif %}{% endif %}"
+      content_filename: "{{series_name|replace(':',' -')|replace('/',' ')}} {{series_id|pad(2)}}{% if proper_count %} PROPER{% if proper_count > 1 %}{{proper_count}}{% endif %}{% endif %}"
       movedone: '{? local.downloads ?}/series/'
   
   deluge-movies:
