@@ -1,13 +1,12 @@
 local:
-  hostname: 'hostname'
-  deluge: '/home/username/downloads/.incomplete'
-  downloads: '/home/username/downloads/flexget'
-  config: '/home/username/.config/flexget'
+  deluge: '/mnt/share/downloads/.incomplete'
+  downloads: '/mnt/share/downloads/flexget'
+  videos: '/mnt/share/videos'
 
 feeds:
-  anime: 'anime url'
-  tv: 'tv url'
-  movies: 'movies url'
+  anime: 'https://anime.rss'
+  tv: 'https://tv.rss'
+  movies: 'https://movies.rss'
 
 pushbullet:
   apikey: 'apikey'
@@ -15,10 +14,3 @@ pushbullet:
 letterboxd:
   username: 'username'
   list: 'list'
-
-myanimelist:
-  username: 'username'
-
-tvdb:
-  username: 'username'
-  account: 'account'

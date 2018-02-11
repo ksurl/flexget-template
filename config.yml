@@ -11,77 +11,56 @@ templates:
       ratio: 1.0
 
     _entries: &entries
-      title: 'FlexGet - {? local.hostname ?}'
+      title: 'FlexGet'
       via:
-        - pushbullet '{? pushbullet.apikey ?}'
+        - pushbullet:
+            api_key: '{? pushbullet.apikey ?}'
     
-  deluge-series:
-    deluge:
-      <<: *deluge
-      content_filename: "{{series_name|replace(':',' -')|replace('/',' ')}} {{series_id|pad(2)}}{% if proper_count %} PROPER{% if proper_count > 1 %}{{proper_count}}{% endif %}{% endif %}"
-      movedone: '{? local.downloads ?}/series/'
+    _filesystem: &filesystem
+      recursive: yes
+      retrieve: files
+      regexp: '.*\.(mp4|mkv)$'
   
-  deluge-movies:
-    deluge:
-      <<: *deluge
-      content_filename: "{{tmdb_name|replace(':',' -')}} [{{tmdb_year}}]"
-      main_file_only: yes
-      movedone: '{? local.downloads ?}/.movies/'
-
   notify-series:
     notify:
       entries:
         <<: *entries
         message: "Downloading {{series_name|replace(':',' -')}} {{series_id|pad(2)}}"
 
-  notify-movies:
+  notify-sort:
     notify:
       entries:
         <<: *entries
-        message: "Downloading {{tmdb_name|replace(':',' -')}} [{{tmdb_year}}]"
+        message: "Downloaded {{title|replace('.mkv','')|replace('.mp4','')}}"
 
 tasks:
 
   anime:
-    rss: '{? feeds.anime ?}'
-    configure_series:
-      from:
-        my_anime_list:
-          username: '{? myanimelist.username ?}'
-          status:
-            - watching
-            - plan_to_watch
-    template:
-      - deluge-series
-      - notify-series
+    rss:
+      url: '{? feeds.anime ?}'
+      all_entries: no
+    include: anime.yml
+    deluge:
+      <<: *deluge
+      content_filename: "{{series_name|replace(':',' -')}} {{series_id|pad(2)}}{% if proper_count %} PROPER{% if proper_count > 1 %}{{proper_count}}{% endif %}{% endif %}"
+      movedone: '{? local.downloads ?}/series/'
+    template: notify-series
 
   tv:
-    rss: '{? feeds.tv ?}'
-    configure_series:
-      from:
-        thetvdb_list:
-          username: '{? tvdb.username ?}'
-          account_id: '{? tvdb.account ?}'
-          strip_dates: yes
-    template:
-      - deluge-series
-      - notify-series
-  
-  magnet-tv:
-    rss: '{? feeds.tv ?}'
-    configure_series:
-      from:
-        thetvdb_list:
-          username: '{? tvdb.username ?}'
-          account_id: '{? tvdb.account ?}'
-          strip_dates: yes
+    rss:
+      url: '{? feeds.tv ?}'
+      all_entries: no
+    include: tv.yml
     deluge:
       <<: *deluge
       movedone: '{? local.downloads ?}/.tv/'
     template: notify-series
+    
   
-  movies-crossmatch:
-    rss: '{? feeds.movies ?}'
+  movies:
+    rss:
+      url: '{? feeds.movies ?}'
+      all_entries: no
     crossmatch:
       from:
         - letterboxd:
@@ -94,48 +73,20 @@ tasks:
       action: accept
       exact: no
     tmdb_lookup: yes
-    template:
-      - deluge-movies
-      - notify-movies
+    deluge:
+      <<: *deluge
+      content_filename: "{{tmdb_name|replace(':',' -')}} [{{tmdb_year}}]"
+      main_file_only: yes
+      movedone: '{? local.downloads ?}/.movies/'
+    notify:
+      entries:
+        <<: *entries
+        message: "Downloading {{tmdb_name|replace(':',' -'}} [{{tmdb_year}}]"
 
-  movies-list:
-    rss: '{? feeds.yts ?}'
-    list_match:
-      from:
-        - movie_list: movies
-    tmdb_lookup: yes
-    template:
-      - deluge-movies
-      - notify-movies
-
-  import-letterboxd:
-    letterboxd:
-      username: '{? letterboxd.username ?}'
-      list: '{? letterboxd.list ?}'
-      sort_by: added
-      max_results: 5
-    tmdb_lookup: yes
-    accept_all: yes
-    list_add:
-      - movie_list: movies
-
-  import-csv:
-    csv:
-      url: 'file://{? local.config ?}/movies.csv'
-      values:
-        title: 1
-        url: 2
-    tmdb_lookup: yes
-    accept_all: yes
-    list_add:
-      - movie_list: movies
-
-  magnet-tv-move:
+  move-tv:
     filesystem:
+      <<: *filesystem
       path: '{? local.downloads ?}/.tv/'
-      recursive: yes
-      retrieve: files
-      mask: '*.mp4'
     accept_all: yes
     metainfo_series: yes
     disable: builtins
@@ -144,42 +95,56 @@ tasks:
       rename: "{{series_name|replace(':',' -')}} {{series_id|pad(2)}}{% if proper_count %} PROPER{% if proper_count > 1 %}{{proper_count}}{% endif %}{% endif %}"
       clean_source: 100
 
-  movies-move:
+  move-movies:
     filesystem:
+      <<: *filesystem
       path: '{? local.downloads ?}/.movies/'
-      recursive: yes
-      retrieve: files
-      mask: '*.mp4'
     accept_all: yes
     disable: builtins
     move:
       to: '{? local.downloads ?}/movies/'
       clean_source: 100
 
-  magnet-cleanup:
-    filesystem:
-      path: '{? local.config ?}/converted/'
-      retrieve: files
-      mask: '*.torrent'
-    accept_all: yes
-    disable: builtins
-    exec: 'rm {? local.config ?}/converted/{{title}}.torrent'
+  
+  sort-anime:
+    filesystem: '{? local.downloads ?}/series/'
+    configure_series:
+      from:
+        filesystem: '{? local.videos ?}/Anime/'
+    move:
+      to: "{? local.videos ?}/Anime/{{series_name}}/"
+    template: notify-sort
 
+  sort-tv:
+    filesystem: '{? local.downloads ?}/series/'
+    configure_series:
+      from:
+        filesystem: '{? local.videos ?}/TV/'
+    move:
+      to: "{? local.videos ?}/TV/{{series_name}}/Season {{series_season}}/"
+    template: notify-sort
+
+  sort-movies:
+    filesystem: '{? local.downloads ?}/movies/'
+    accept_all: yes
+    move:
+      to: "{? local.videos ?}/Movies/"
+    template: notify-sort
+    
 schedules:
   - tasks: [anime, tv]
     schedule:
       minute: "*/30"
-  - tasks: movies-crossmatch
+  - tasks: movies
     schedule:
-      hour: 2
-  - tasks: movies-move
+      hour: 8
+  - tasks: move-movies
     schedule:
-      hour: 2
-      minute: 30
-  - tasks: magnet-tv-move
+      hour: 10
+  - tasks: move-tv
+    schedule:
+      minute: "*/15"
+  - tasks: [sort-anime, sort-tv, sort-movies]
     schedule:
       minute: 10,40
-  - tasks: magnet-cleanup
-    schedule:
-      day_of_week: mon
-      hour: 6
+      hour: 8-23
