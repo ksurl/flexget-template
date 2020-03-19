@@ -1,16 +1,37 @@
+remote:
+  downloads: '/home/user/downloads/flexget'
+  deluge: '/home/user/downloads/.incomplete'
+  batch: '/home/user/downloads/deluge'
+
 local:
-  deluge: '/mnt/share/downloads/.incomplete'
   downloads: '/mnt/share/downloads/flexget'
   videos: '/mnt/share/videos'
+
+deluge:
+  username: username
+  password: password
+  ratio: 1.0
+
+proxy:
+  address: socks5://host:port
+
+sftp:
+  host: 'IP address'
+  port: 'port'
+  username: username
+  private_key: '/home/user/.ssh/key'
 
 feeds:
   anime: 'https://anime.rss'
   tv: 'https://tv.rss'
   movies: 'https://movies.rss'
 
+regexp:
+  filter: bluray.h264.aac-rarbg
+
+trakt:
+  username:  username
+  movies: 'list name'
+
 pushbullet:
   apikey: 'apikey'
-
-letterboxd:
-  username: 'username'
-  list: 'list'

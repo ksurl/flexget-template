@@ -4,9 +4,13 @@ templates:
 
   global:
     no_entries_ok: yes
+    proxy:
+      socks5: '{? proxy.address ?}'
 
   anchors:
     _deluge: &deluge
+      username: '{? deluge.username ?}'
+      password: '{? deluge.password ?}'
       path: '{? local.deluge ?}'
       ratio: 1.0
 
@@ -17,9 +21,23 @@ templates:
             api_key: '{? pushbullet.apikey ?}'
     
     _filesystem: &filesystem
-      recursive: yes
       retrieve: files
       regexp: '.*\.(mp4|mkv)$'
+    
+    _free_space: &free_space
+      path: '{? local.downloads ?}'
+
+    _sftp_list: &sftp_list
+      host: '{? sftp.host ?}'
+      port: '{? sftp.port ?}'
+      username: '{? sftp.username ?}'
+      private_key: '{? sftp.private_key ?}'
+      private_key_pass: '{? sftp.private_key_pass ?}'
+
+    _trakt_list: &trakt_list
+      username: '{? trakt.username ?}'
+      account: '{? trakt.username ?}'
+      strip_dates: yes
   
   notify-series:
     notify:
@@ -40,10 +58,13 @@ tasks:
       url: '{? feeds.anime ?}'
       all_entries: no
     include: anime.yml
+    free_space:
+      <<: *free_space
+      space: 1000
     deluge:
       <<: *deluge
-      content_filename: "{{series_name|replace(':',' -')}} {{series_id|pad(2)}}{% if proper_count %} PROPER{% if proper_count > 1 %}{{proper_count}}{% endif %}{% endif %}"
-      movedone: '{? local.downloads ?}/series/'
+      content_filename: "{{series_name|replace(':',' -')}} {{series_id|pad(2)}}"
+      move_completed_path: '{? remote.downloads ?}/anime/'
     template: notify-series
 
   tv:
@@ -51,100 +72,147 @@ tasks:
       url: '{? feeds.tv ?}'
       all_entries: no
     include: tv.yml
+    free_space:
+      <<: *free_space
+      space: 1500
     deluge:
       <<: *deluge
-      movedone: '{? local.downloads ?}/.tv/'
+      move_completed_path: '{? remote.downloads ?}/tv/'
     template: notify-series
-    
   
   movies:
     rss:
       url: '{? feeds.movies ?}'
       all_entries: no
-    crossmatch:
-      from:
-        - letterboxd:
-            username: '{? letterboxd.username ?}'
-            list: '{? letterboxd.list ?}'
-            sort_by: release_ascending
-            max_results: 5
-      fields:
-        - title
-      action: accept
-      exact: no
+    regexp:
+      reject_excluding:
+        - '{? regexp.filter ?}'
     tmdb_lookup: yes
+    list_match:
+      from:
+        - movie_list: movies
+    free_space:
+      <<: *free_space
+      space: 3500
     deluge:
       <<: *deluge
-      content_filename: "{{tmdb_name|replace(':',' -')}} [{{tmdb_year}}]"
-      main_file_only: yes
-      movedone: '{? local.downloads ?}/.movies/'
+      move_completed_path: '{? remote.downloads ?}/movies/'
     notify:
       entries:
         <<: *entries
         message: "Downloading {{tmdb_name|replace(':',' -'}} [{{tmdb_year}}]"
 
-  move-tv:
+  update-movie-list:
+    limit:
+      amount: 10
+      from:
+        trakt_list:
+          <<: *trakt_list
+          list: '{? trakt.movies ?}'
+          type: movies
+    accept_all: yes
+    list_add:
+      - movie_list: movies
+    list_remove:
+      - trakt_list:
+          <<: *trakt_list
+          list: '{? trakt.movies ?}'
+          type: movies
+
+  deluge-cleanup:
+    from_deluge: yes
+    disable: builtins
+    if:
+      - deluge_progress == 100: accept
+    deluge:
+      action: remove
+
+  sync-anime:
+    sftp_list:
+      <<: *sftp_list
+      dirs:
+        - '{? remote.downloads ?}/anime/'
+    regexp:
+      accept:
+        - '.*\.mkv$'
+    free_space:
+      <<: *free_space
+      space: 1500
+    sftp_download:
+      to: '{? local.downloads ?}/anime/'
+
+  sync-tv:
+    sftp_list:
+      <<: *sftp_list
+      dirs:
+        - '{? remote.downloads ?}/tv/'
+      recursive: true
+    regexp:
+      accept:
+        -  '.*\.mkv$'
+    free_space:
+      <<: *free_space
+      space: 1500
+    sftp_download:
+      to: '{? local.downloads ?}/tv/'
+
+  sync-movies:
+    sftp_list:
+      <<: *sftp_list
+      dirs:
+        - '{? remote.downloads ?}/movies/'
+      recursive: true
+    regexp:
+      accept:
+        -  '.*\.mp4$'
+    free_space:
+      <<: *free_space
+      space: 3500
+    sftp_download:
+      to: '{? local.downloads ?}/.movies/'
+
+  sort-anime:
     filesystem:
       <<: *filesystem
-      path: '{? local.downloads ?}/.tv/'
+      path: '{? local.downloads ?}/anime/'
     accept_all: yes
-    metainfo_series: yes
     disable: builtins
     move:
-      to: '{? local.downloads ?}/series/'
+      to: "{? local.videos ?}/Anime/{{title|re_replace(' \\d{2}','')|replace('.mkv','')}}/"
+    template: notify-sort
+  
+  sort-tv:
+    filesystem:
+      <<: *filesystem
+      path: '{? local.downloads ?}/tv/'
+    metainfo_series: yes
+    accept_all: yes
+    disable: builtins
+    move:
+      to: "{? local.videos ?}/TV/{{series_name}}/Season {{series_season}}/"
       rename: "{{series_name|replace(':',' -')}} {{series_id|pad(2)}}{% if proper_count %} PROPER{% if proper_count > 1 %}{{proper_count}}{% endif %}{% endif %}"
-      clean_source: 100
+    template: notify-sort
 
   move-movies:
-    filesystem:
+    filesystem: 
       <<: *filesystem
       path: '{? local.downloads ?}/.movies/'
     accept_all: yes
+    tmdb_lookup: yes
     disable: builtins
     move:
-      to: '{? local.downloads ?}/movies/'
-      clean_source: 100
-
+      to: "{? local.downloads ?}/movies/"
+      rename: "{{tmdb_name|replace(':',' -')}} [{{tmdb_year}}]"
+    template: notify-sort
   
-  sort-anime:
-    filesystem: '{? local.downloads ?}/series/'
-    configure_series:
-      from:
-        filesystem: '{? local.videos ?}/Anime/'
-    move:
-      to: "{? local.videos ?}/Anime/{{series_name}}/"
-    template: notify-sort
-
-  sort-tv:
-    filesystem: '{? local.downloads ?}/series/'
-    configure_series:
-      from:
-        filesystem: '{? local.videos ?}/TV/'
-    move:
-      to: "{? local.videos ?}/TV/{{series_name}}/Season {{series_season}}/"
-    template: notify-sort
-
-  sort-movies:
-    filesystem: '{? local.downloads ?}/movies/'
-    accept_all: yes
-    move:
-      to: "{? local.videos ?}/Movies/"
-    template: notify-sort
-    
 schedules:
   - tasks: [anime, tv]
     schedule:
       minute: "*/30"
-  - tasks: movies
+  - tasks: [update-movie-list, movies]
     schedule:
-      hour: 8
-  - tasks: move-movies
-    schedule:
-      hour: 10
-  - tasks: move-tv
-    schedule:
-      minute: "*/15"
-  - tasks: [sort-anime, sort-tv, sort-movies]
-    schedule:
+      hour: "*/2"
       minute: 10,40
-      hour: 8-23
+  - tasks: [sync-anime, sort-anime, sync-tv, sort-tv, sync-movies, move-movies]
+    schedule:
+      minute: "*/30"
