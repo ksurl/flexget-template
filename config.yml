@@ -1,106 +1,108 @@
 variables: variables.yml
 
+web_server:
+  web_ui: yes
+
 templates:
 
   global:
     no_entries_ok: yes
-    proxy:
-      socks5: '{? proxy.address ?}'
 
   anchors:
-    _deluge: &deluge
-      username: '{? deluge.username ?}'
-      password: '{? deluge.password ?}'
-      path: '{? local.deluge ?}'
-      ratio: 1.0
+    _transmission: &transmission
+      host: '{? transmission.host ?}'
+      port: '{? transmission.port ?}'
 
-    _entries: &entries
-      title: 'FlexGet'
-      via:
-        - pushbullet:
-            api_key: '{? pushbullet.apikey ?}'
-    
     _filesystem: &filesystem
       retrieve: files
       regexp: '.*\.(mp4|mkv)$'
-    
-    _free_space: &free_space
-      path: '{? local.downloads ?}'
-
-    _sftp_list: &sftp_list
-      host: '{? sftp.host ?}'
-      port: '{? sftp.port ?}'
-      username: '{? sftp.username ?}'
-      private_key: '{? sftp.private_key ?}'
-      private_key_pass: '{? sftp.private_key_pass ?}'
 
     _trakt_list: &trakt_list
       username: '{? trakt.username ?}'
       account: '{? trakt.username ?}'
       strip_dates: yes
   
-  notify-series:
+  notify-download:
     notify:
       entries:
-        <<: *entries
-        message: "Downloading {{series_name|replace(':',' -')}} {{series_id|pad(2)}}"
+        entries:
+        message: ''
+        via:
+          - discord:
+              web_hook_url: "{? discord.webhook ?}"
+              embeds:
+                - title: 'Downloading'
+                  description: >
+                    {% if series_name is defined %}{{series_name}} {{series_id|pad(2)}}
+                    {% elif tmdb_name is defined %}{{tmdb_name}} [{{tmdb_year}}]
+                    {% else %}{{title|replace('.mkv','')|replace('.mp4','')}}
+                    {% endif %}
+                  color: 0xf5d442
 
   notify-sort:
     notify:
       entries:
-        <<: *entries
-        message: "Downloaded {{title|replace('.mkv','')|replace('.mp4','')}}"
+        message: ''
+        via:
+          - discord:
+              web_hook_url: "{? discord.webhook ?}"
+              embeds:
+                - title: 'Downloaded'
+                  description: >
+                    {% if task|re_search("anime") %}{{title|replace('.mkv','')}}
+                    {% elif task|re_search("tv") %}{{series_name}} {{series_id|pad(2)}}
+                    {% elif task|re_search("movie") %}{{tmdb_name}} [{{tmdb_year}}]
+                    {% else %}{{title|replace('.mkv','')|replace('.mp4','')}}
+                    {% endif %}
+                  color: 0x28A745
 
 tasks:
 
-  anime:
+  download-anime:
     rss:
       url: '{? feeds.anime ?}'
       all_entries: no
     include: anime.yml
-    free_space:
-      <<: *free_space
-      space: 1000
-    deluge:
-      <<: *deluge
-      content_filename: "{{series_name|replace(':',' -')}} {{series_id|pad(2)}}"
-      move_completed_path: '{? remote.downloads ?}/anime/'
-    template: notify-series
+    proxy:
+      url: '{? proxy.url ?}'
+    transmission:
+      <<: *transmission
+      content_filename: "{{series_name}} {{series_id|pad(2)}}"
+      path: '{? transmission.downloads ?}/anime/'
+    template: notify-download
 
-  tv:
+  download-tv:
     rss:
       url: '{? feeds.tv ?}'
       all_entries: no
+      silent: yes
+      escape: yes
     include: tv.yml
-    free_space:
-      <<: *free_space
-      space: 1500
-    deluge:
-      <<: *deluge
-      move_completed_path: '{? remote.downloads ?}/tv/'
+    proxy:
+      url: '{? proxy.url ?}'
+    transmission:
+      <<: *transmission
+      path: '{? transmission.downloads ?}/.tv/'
     template: notify-series
   
-  movies:
+  download-movies:
     rss:
       url: '{? feeds.movies ?}'
       all_entries: no
+    proxy:
+      url: '{? proxy.url ?}'
     regexp:
       reject_excluding:
         - '{? regexp.filter ?}'
+      from: title
     tmdb_lookup: yes
     list_match:
       from:
         - movie_list: movies
-    free_space:
-      <<: *free_space
-      space: 3500
-    deluge:
-      <<: *deluge
-      move_completed_path: '{? remote.downloads ?}/movies/'
-    notify:
-      entries:
-        <<: *entries
-        message: "Downloading {{tmdb_name|replace(':',' -'}} [{{tmdb_year}}]"
+    transmission:
+      <<: *transmission
+      path: '{? transmission.downloads ?}/.movies/'
+    template: notify-download
 
   update-movie-list:
     limit:
@@ -111,6 +113,7 @@ tasks:
           list: '{? trakt.movies ?}'
           type: movies
     accept_all: yes
+    tmdb_lookup: yes
     list_add:
       - movie_list: movies
     list_remove:
@@ -118,58 +121,6 @@ tasks:
           <<: *trakt_list
           list: '{? trakt.movies ?}'
           type: movies
-
-  deluge-cleanup:
-    from_deluge: yes
-    disable: builtins
-    if:
-      - deluge_progress == 100: accept
-    deluge:
-      action: remove
-
-  sync-anime:
-    sftp_list:
-      <<: *sftp_list
-      dirs:
-        - '{? remote.downloads ?}/anime/'
-    regexp:
-      accept:
-        - '.*\.mkv$'
-    free_space:
-      <<: *free_space
-      space: 1500
-    sftp_download:
-      to: '{? local.downloads ?}/anime/'
-
-  sync-tv:
-    sftp_list:
-      <<: *sftp_list
-      dirs:
-        - '{? remote.downloads ?}/tv/'
-      recursive: true
-    regexp:
-      accept:
-        -  '.*\.mkv$'
-    free_space:
-      <<: *free_space
-      space: 1500
-    sftp_download:
-      to: '{? local.downloads ?}/tv/'
-
-  sync-movies:
-    sftp_list:
-      <<: *sftp_list
-      dirs:
-        - '{? remote.downloads ?}/movies/'
-      recursive: true
-    regexp:
-      accept:
-        -  '.*\.mp4$'
-    free_space:
-      <<: *free_space
-      space: 3500
-    sftp_download:
-      to: '{? local.downloads ?}/.movies/'
 
   sort-anime:
     filesystem:
@@ -201,18 +152,27 @@ tasks:
     tmdb_lookup: yes
     disable: builtins
     move:
-      to: "{? local.downloads ?}/movies/"
+      to: "{? local.videos ?}/Movies/"
       rename: "{{tmdb_name|replace(':',' -')}} [{{tmdb_year}}]"
     template: notify-sort
+
+  cleanup-transmission:
+    from_transmission:
+      host: '{? transmission.host ?}'
+      port: '{? transmission.port ?}'
+      only_complete: yes
+    disable: builtins
+    accept_all: yes
+    transmission:
+      host: '{? transmission.host ?}'
+      port: '{? transmission.port ?}'
+      action: remove
   
 schedules:
-  - tasks: [anime, tv]
+  - tasks: [ download-anime, download-tv, sort-* ]
     schedule:
-      minute: "*/30"
-  - tasks: [update-movie-list, movies]
+      minute: "*/15"
+  - tasks: [ update-movie-list, download-movies, move-movies ]
     schedule:
-      hour: "*/2"
+      hour: "*/6"
       minute: 10,40
-  - tasks: [sync-anime, sort-anime, sync-tv, sort-tv, sync-movies, move-movies]
-    schedule:
-      minute: "*/30"

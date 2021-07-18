@@ -1,25 +1,14 @@
-remote:
-  downloads: '/home/user/downloads/flexget'
-  deluge: '/home/user/downloads/.incomplete'
-  batch: '/home/user/downloads/deluge'
-
 local:
-  downloads: '/mnt/share/downloads/flexget'
-  videos: '/mnt/share/videos'
-
-deluge:
-  username: username
-  password: password
-  ratio: 1.0
+  downloads: /downloads
+  videos: /media'
 
 proxy:
-  address: socks5://host:port
+  url: 'http://host:port'
 
-sftp:
-  host: 'IP address'
-  port: 'port'
-  username: username
-  private_key: '/home/user/.ssh/key'
+transmission:
+  host: 'IP'
+  port: 9091
+  downloads: /downloads/flexget
 
 feeds:
   anime: 'https://anime.rss'
@@ -27,11 +16,11 @@ feeds:
   movies: 'https://movies.rss'
 
 regexp:
-  filter: bluray.h264.aac-rarbg
+  filter: 'regex'
+
+discord:
+  webhook: 'https://discordapp.com/api/webhooks/ID/TOKEN'
 
 trakt:
   username:  username
   movies: 'list name'
-
-pushbullet:
-  apikey: 'apikey'
