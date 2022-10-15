@@ -1,13 +1,10 @@
 local:
   downloads: /downloads
-  videos: /media'
+  videos: /media
 
-proxy:
-  url: 'http://host:port'
 
 transmission:
   host: 'IP'
-  port: 9091
   downloads: /downloads/flexget
 
 feeds:
@@ -18,8 +15,10 @@ feeds:
 regexp:
   filter: 'regex'
 
-discord:
-  webhook: 'https://discordapp.com/api/webhooks/ID/TOKEN'
+ntfysh:
+  topic: 'ntfy_topic'
+  username: 'ntfy_user'
+  password: 'ntfy_pw'
 
 trakt:
   username:  username

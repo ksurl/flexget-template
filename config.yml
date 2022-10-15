@@ -9,13 +9,16 @@ templates:
     no_entries_ok: yes
 
   anchors:
-    _transmission: &transmission
-      host: '{? transmission.host ?}'
-      port: '{? transmission.port ?}'
 
     _filesystem: &filesystem
       retrieve: files
       regexp: '.*\.(mp4|mkv)$'
+
+    _ntfysh: &ntfysh
+      topic: '{? ntfysh.topic ?}'
+      url: '{? ntfysh.url ?}'
+      username: '{? ntfysh.username ?}'
+      password: '{? ntfysh.password ?}'
 
     _trakt_list: &trakt_list
       username: '{? trakt.username ?}'
@@ -25,36 +28,29 @@ templates:
   notify-download:
     notify:
       entries:
-        entries:
-        message: ''
+        title: "Downloading"
+        message: >
+          {% if series_name is defined %}{{series_name}} {{series_id|pad(2)}}
+          {% elif tmdb_name is defined %}{{tmdb_name}} [{{tmdb_year}}]
+          {% else %}{{title|replace('.mkv','')|replace('.mp4','')}}
+          {% endif %}
         via:
-          - discord:
-              web_hook_url: "{? discord.webhook ?}"
-              embeds:
-                - title: 'Downloading'
-                  description: >
-                    {% if series_name is defined %}{{series_name}} {{series_id|pad(2)}}
-                    {% elif tmdb_name is defined %}{{tmdb_name}} [{{tmdb_year}}]
-                    {% else %}{{title|replace('.mkv','')|replace('.mp4','')}}
-                    {% endif %}
-                  color: 0xf5d442
+          - ntfysh:
+              <<: *ntfysh
 
   notify-sort:
     notify:
       entries:
-        message: ''
+        title: "Downloaded"
+        message: >
+          {% if task|re_search("anime") %}{{title|replace('.mkv','')}}
+          {% elif task|re_search("tv") %}{{series_name}} {{series_id|pad(2)}}
+          {% elif task|re_search("movie") %}{{tmdb_name}} [{{tmdb_year}}]
+          {% else %}{{title|replace('.mkv','')|replace('.mp4','')}}
+          {% endif %}
         via:
-          - discord:
-              web_hook_url: "{? discord.webhook ?}"
-              embeds:
-                - title: 'Downloaded'
-                  description: >
-                    {% if task|re_search("anime") %}{{title|replace('.mkv','')}}
-                    {% elif task|re_search("tv") %}{{series_name}} {{series_id|pad(2)}}
-                    {% elif task|re_search("movie") %}{{tmdb_name}} [{{tmdb_year}}]
-                    {% else %}{{title|replace('.mkv','')|replace('.mp4','')}}
-                    {% endif %}
-                  color: 0x28A745
+          - ntfysh:
+              <<: *ntfysh
 
 tasks:
 
@@ -63,10 +59,8 @@ tasks:
       url: '{? feeds.anime ?}'
       all_entries: no
     include: anime.yml
-    proxy:
-      url: '{? proxy.url ?}'
     transmission:
-      <<: *transmission
+      host: '{? transmission.host ?}'
       content_filename: "{{series_name}} {{series_id|pad(2)}}"
       path: '{? transmission.downloads ?}/anime/'
     template: notify-download
@@ -78,10 +72,8 @@ tasks:
       silent: yes
       escape: yes
     include: tv.yml
-    proxy:
-      url: '{? proxy.url ?}'
     transmission:
-      <<: *transmission
+      host: '{? transmission.host ?}'
       path: '{? transmission.downloads ?}/.tv/'
     template: notify-series
   
@@ -89,8 +81,6 @@ tasks:
     rss:
       url: '{? feeds.movies ?}'
       all_entries: no
-    proxy:
-      url: '{? proxy.url ?}'
     regexp:
       reject_excluding:
         - '{? regexp.filter ?}'
@@ -100,8 +90,8 @@ tasks:
       from:
         - movie_list: movies
     transmission:
-      <<: *transmission
-      path: '{? transmission.downloads ?}/.movies/'
+      host: '{? transmission.host ?}'
+      path: '{? transmission.downloads ?}/movies/'
     template: notify-download
 
   update-movie-list:
@@ -129,50 +119,51 @@ tasks:
     accept_all: yes
     disable: builtins
     move:
-      to: "{? local.videos ?}/Anime/{{title|re_replace(' \\d{2}','')|replace('.mkv','')}}/"
+      to: "{? local.videos ?}/Anime/{{title|re_replace(' \\d{2,3}$','')}}/"
     template: notify-sort
   
   sort-tv:
     filesystem:
       <<: *filesystem
+      recursive: yes
       path: '{? local.downloads ?}/tv/'
     metainfo_series: yes
     accept_all: yes
     disable: builtins
     move:
       to: "{? local.videos ?}/TV/{{series_name}}/Season {{series_season}}/"
-      rename: "{{series_name|replace(':',' -')}} {{series_id|pad(2)}}{% if proper_count %} PROPER{% if proper_count > 1 %}{{proper_count}}{% endif %}{% endif %}"
+      rename: "{{series_name|replace(':',' -')}} {{series_id|pad(2)}}"
+      clean_source: 100
     template: notify-sort
 
   move-movies:
     filesystem: 
       <<: *filesystem
+      recursive: yes
       path: '{? local.downloads ?}/.movies/'
     accept_all: yes
     tmdb_lookup: yes
     disable: builtins
     move:
-      to: "{? local.videos ?}/Movies/"
-      rename: "{{tmdb_name|replace(':',' -')}} [{{tmdb_year}}]"
+      to: "{? local.videos ?}/Movies/{{tmdb_name}} ({{tmdb_year}})"
+      rename: "{{tmdb_name|replace(':',' -')}} ({{tmdb_year}})"
+      clean_source: 100
     template: notify-sort
 
   cleanup-transmission:
     from_transmission:
       host: '{? transmission.host ?}'
-      port: '{? transmission.port ?}'
       only_complete: yes
     disable: builtins
     accept_all: yes
     transmission:
       host: '{? transmission.host ?}'
-      port: '{? transmission.port ?}'
       action: remove
   
 schedules:
-  - tasks: [ download-anime, download-tv, sort-* ]
+  - tasks: [ download-anime, download-tv, sort-*, cleanup-transmission ]
     schedule:
       minute: "*/15"
   - tasks: [ update-movie-list, download-movies, move-movies ]
     schedule:
-      hour: "*/6"
-      minute: 10,40
+      minute: 10,25,40,55
