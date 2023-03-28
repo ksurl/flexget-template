@@ -9,6 +9,7 @@ transmission:
 
 feeds:
   anime: 'https://anime.rss'
+  anime2: 'https://anime2.rss'
   tv: 'https://tv.rss'
   movies: 'https://movies.rss'
 

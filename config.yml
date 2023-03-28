@@ -55,9 +55,13 @@ templates:
 tasks:
 
   download-anime:
-    rss:
-      url: '{? feeds.anime ?}'
-      all_entries: no
+    inputs:
+      - rss:
+          url: '{? feeds.anime ?}'
+          all_entries: no
+      - rss:
+          url: '{? feeds.anime2 ?}'
+          all_entries: no
     include: anime.yml
     transmission:
       host: '{? transmission.host ?}'
@@ -74,7 +78,7 @@ tasks:
     include: tv.yml
     transmission:
       host: '{? transmission.host ?}'
-      path: '{? transmission.downloads ?}/.tv/'
+      path: '{? transmission.downloads ?}/tv/'
     template: notify-series
   
   download-movies:
@@ -117,9 +121,14 @@ tasks:
       <<: *filesystem
       path: '{? local.downloads ?}/anime/'
     accept_all: yes
-    disable: builtins
+    require_field: series_name
+    include: anime.yml
+    seen: local
+    all_series:
+      parse_only: yes
     move:
-      to: "{? local.videos ?}/Anime/{{title|re_replace(' \\d{2,3}$','')}}/"
+      to: "{? local.videos ?}/Anime/{{series_name}}/"
+      rename: "{{series_name|replace(':',' -')}} {{series_id|pad(2)}}"
     template: notify-sort
   
   sort-tv:
@@ -127,9 +136,12 @@ tasks:
       <<: *filesystem
       recursive: yes
       path: '{? local.downloads ?}/tv/'
-    metainfo_series: yes
     accept_all: yes
-    disable: builtins
+    require_field: series_name
+    include: tv.yml
+    seen: local
+    all_series:
+      parse_only: yes
     move:
       to: "{? local.videos ?}/TV/{{series_name}}/Season {{series_season}}/"
       rename: "{{series_name|replace(':',' -')}} {{series_id|pad(2)}}"
@@ -149,19 +161,9 @@ tasks:
       rename: "{{tmdb_name|replace(':',' -')}} ({{tmdb_year}})"
       clean_source: 100
     template: notify-sort
-
-  cleanup-transmission:
-    from_transmission:
-      host: '{? transmission.host ?}'
-      only_complete: yes
-    disable: builtins
-    accept_all: yes
-    transmission:
-      host: '{? transmission.host ?}'
-      action: remove
   
 schedules:
-  - tasks: [ download-anime, download-tv, sort-*, cleanup-transmission ]
+  - tasks: [ download-anime, download-tv, sort-* ]
     schedule:
       minute: "*/15"
   - tasks: [ update-movie-list, download-movies, move-movies ]
